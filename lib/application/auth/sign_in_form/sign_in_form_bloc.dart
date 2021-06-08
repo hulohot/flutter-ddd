@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:bloc/bloc.dart';
 import 'package:dartz/dartz.dart';
@@ -21,6 +22,71 @@ class SignInFormBloc extends Bloc<SignInFormEvent, SignInFormState> {
   Stream<SignInFormState> mapEventToState(
     SignInFormEvent event,
   ) async* {
-    // TODO: implement mapEventToState
+    yield* event.map(
+      emailChanged: (e) async* {
+        yield state.copyWith(
+          emailAddress: EmailAddress(e.emailStr),
+          authFailureOrSuccessOption: none(),
+        );
+      },
+      passwordChanged: (e) async* {
+        yield state.copyWith(
+          password: Password(e.passwordStr),
+          authFailureOrSuccessOption: none(),
+        );
+      },
+      registerWithEmailAndPasswordPressed: (e) async* {
+        yield* _preformActionOnAuthFacadeWithEmailAndPassword(
+          _authFacade.registerWithEmailAndPassword,
+        );
+      },
+      signInWithEmailAndPasswordPressed: (e) async* {
+        yield* _preformActionOnAuthFacadeWithEmailAndPassword(
+          _authFacade.signInWithEmailAndPassword,
+        );
+      },
+      signInWithGooglePressed: (e) async* {
+        yield state.copyWith(
+          isSubmitting: true,
+          authFailureOrSuccessOption: none(),
+        );
+        final failureOrSuccess = await _authFacade.signInWithGoogle();
+        yield state.copyWith(
+          isSubmitting: true,
+          authFailureOrSuccessOption: some(failureOrSuccess),
+        );
+      },
+    );
+  }
+
+  Stream<SignInFormState> _preformActionOnAuthFacadeWithEmailAndPassword(
+    Future<Either<AuthFailure, Unit>> Function({
+      @required EmailAddress emailAddress,
+      @required Password password,
+    })
+        forwaredCall,
+  ) async* {
+    Either<AuthFailure, Unit> failureOrSuccess;
+
+    final isEmailValid = state.emailAddress.isValid();
+    final isPasswordValid = state.password.isValid();
+
+    if (isEmailValid && isPasswordValid) {
+      yield state.copyWith(
+        isSubmitting: true,
+        authFailureOrSuccessOption: none(),
+      );
+
+      failureOrSuccess = await forwaredCall(
+        emailAddress: state.emailAddress,
+        password: state.password,
+      );
+    }
+
+    yield state.copyWith(
+      showErrorMessages: false,
+      // optionOf is equivelent to failureOr == null ? none() : some(failureOrSuccess)
+      authFailureOrSuccessOption: optionOf(failureOrSuccess),
+    );
   }
 }
